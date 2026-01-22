@@ -34,7 +34,7 @@ def test_pipeline_simple_execution() -> None:
     pipeline.run()
 
     try:
-        ds = pipeline._initialize_cache_storage()
+        ds = pipeline.open_cache()
 
         assert ds["y"] == 15
         assert ds["z"] == 16
@@ -61,7 +61,7 @@ def test_pipeline_addition() -> None:
     pipeline.run()
 
     try:
-        ds = pipeline._initialize_cache_storage()
+        ds = pipeline.open_cache()
 
         assert ds["z"] == 8
     finally:

@@ -150,7 +150,7 @@ class Pipeline:
     def nodes_info(self) -> list[dict[str, Any]]:
         return [{"func": node.func.__name__, "inputs": node.inputs, "outputs": node.outputs} for node in self.nodes]
 
-    def _initialize_cache_storage(self) -> shelve.Shelf[Any]:
+    def open_cache(self) -> shelve.Shelf[Any]:
         """
         Initialize cache storage.
 
@@ -192,7 +192,7 @@ class Pipeline:
              a warning is logged.
         4. If history tracking is enabled, logs the node's name, inputs, and outputs for debugging purposes.
         """
-        self.data_storage = self._initialize_cache_storage()
+        self.data_storage = self.open_cache()
         try:
             for node in self.nodes:
                 logger.info(f"Running node: {node.func.__name__}")
