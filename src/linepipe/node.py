@@ -16,7 +16,7 @@ class Node:
     def run(self, data: dict[str, Any]) -> dict[str, Any]:
         func_args = [data[key] for key in self.inputs]
 
-        def _run_func() -> dict[str, Any]:
+        def _run_func() -> Any:
             try:
                 return self.func(*func_args)
             except Exception as e:
@@ -36,7 +36,7 @@ class Node:
 
         return dict(zip(self.outputs, result, strict=False))
 
-    def _profile_memory(self, func: Callable[[], dict[str, Any]]) -> tuple[dict[str, float], dict[str, Any]]:
+    def _profile_memory(self, func: Callable[[], Any]) -> tuple[dict[str, float], Any]:
         try:
             from memory_profiler import memory_usage  # pyright: ignore[reportMissingImports]
         except ImportError as exc:
@@ -45,19 +45,19 @@ class Node:
                 "Install with: pip install linepipe[memory]"
             ) from exc
 
-        result_container = {}
+        # result_container = {}
 
-        def wrapper() -> None:
-            result_container["output"] = func()
+        # def wrapper() -> None:
+        #     result_container["output"] = func()
 
-        mem_values = memory_usage(wrapper, interval=0.05, retval=False)
+        (mem_values, result) = memory_usage((func, (), {}), interval=0.05, retval=True)  # pyright: ignore[reportArgumentType]
         delta = mem_values[-1] - mem_values[0]
         peak = max(mem_values) - mem_values[0]
 
-        return {"delta": delta, "peak": peak}, result_container["output"]
+        return {"delta": delta, "peak": peak}, result
 
 
-def create_named_partial_function(func: Callable[..., Any], func_name: str, **kwargs: dict[str, Any]) -> Callable[[], Any]:
+def create_named_partial_function(func: Callable[..., Any], func_name: str, **kwargs: dict[str, Any]) -> Callable[..., Any]:
     f = cast(Callable[[], Any], partial(func, **kwargs))
     f.__name__ = func_name
     f.__no_type_check__ = True  # type: ignore[attr-defined]
