@@ -1,4 +1,4 @@
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from functools import partial
 from logging import getLogger
 from typing import Any, cast
@@ -18,7 +18,7 @@ class Node:
     Nodes are executed by Pipeline.run().
     """
 
-    def __init__(self, func: Callable[..., Any], inputs: list[str], outputs: list[str], profile: bool = False):
+    def __init__(self, func: Callable[..., Any], inputs: Sequence[str], outputs: Sequence[str], profile: bool = False):
         self.func = func
         self.inputs = tuple(inputs)
         self.outputs = tuple(outputs)
@@ -69,7 +69,7 @@ class Node:
         return {"delta": delta, "peak": peak}, result
 
 
-def create_named_partial_function(func: Callable[..., Any], func_name: str, **kwargs: dict[str, Any]) -> Callable[..., Any]:
+def create_named_partial_function(func: Callable[..., Any], func_name: str, **kwargs: Any) -> Callable[..., Any]:
     """
     Create a partially-applied function with a stable, explicit name.
 
