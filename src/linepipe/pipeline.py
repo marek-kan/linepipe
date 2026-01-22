@@ -76,9 +76,9 @@ class Pipeline:
         nodes: list[Node],
         config: Any,
         track_history: bool = False,
-        cache_storage_path: str | Path = Path("./.cache"),
-        use_persistant_cache: bool = True,
-        **kwargs: dict[str, Any],
+        cache_storage_path: str | Path = Path("./.cache/data_storage/"),
+        use_persistant_cache: bool = False,
+        **kwargs: Any,
     ) -> None:
         """
         Args:
@@ -150,7 +150,7 @@ class Pipeline:
     def nodes_info(self) -> list[dict[str, Any]]:
         return [{"func": node.func.__name__, "inputs": node.inputs, "outputs": node.outputs} for node in self.nodes]
 
-    def _initialize_cache_storage(self, cache_storage_path: str | Path) -> shelve.Shelf[Any]:
+    def _initialize_cache_storage(self) -> shelve.Shelf[Any]:
         """
         Initialize cache storage.
 
@@ -163,16 +163,16 @@ class Pipeline:
             logger.info("Using in-memory cache storage")
             return shelve.Shelf({})
 
-        if isinstance(cache_storage_path, str):
-            cache_storage_path = Path(cache_storage_path)
+        if isinstance(self.cache_storage_path, str):
+            self.cache_storage_path = Path(self.cache_storage_path)
 
-        if not cache_storage_path.parent.exists():
-            logger.info(f"Creating data storage directory: {cache_storage_path.parent}")
-            cache_storage_path.parent.mkdir(parents=True)
+        if not self.cache_storage_path.parent.exists():
+            logger.info(f"Creating data storage directory: {self.cache_storage_path.parent}")
+            self.cache_storage_path.parent.mkdir(parents=True)
         else:
-            logger.info(f"Using data storage located at: {cache_storage_path.parent}")
+            logger.info(f"Using data storage located at: {self.cache_storage_path.parent}")
 
-        return shelve.open(str(cache_storage_path), protocol=pickle.HIGHEST_PROTOCOL, writeback=False)  # noqa: S301
+        return shelve.open(str(self.cache_storage_path), protocol=pickle.HIGHEST_PROTOCOL, writeback=False)  # noqa: S301
 
     def run(self) -> None:
         """
@@ -192,7 +192,7 @@ class Pipeline:
              a warning is logged.
         4. If history tracking is enabled, logs the node's name, inputs, and outputs for debugging purposes.
         """
-        self.data_storage = self._initialize_cache_storage(self.cache_storage_path)
+        self.data_storage = self._initialize_cache_storage()
         try:
             for node in self.nodes:
                 logger.info(f"Running node: {node.func.__name__}")

@@ -42,14 +42,14 @@ class Node:
         if not self.outputs:
             return {}
 
+        if len(self.outputs) == 1:
+            return {self.outputs[0]: result}
+
         if len(self.outputs) != len(result):
             raise ValueError(
                 f"Function `{self.func.__name__}` returned {len(result)} values, "
                 f"but {len(self.outputs)} outputs were declared"
             )
-
-        if len(self.outputs) == 1:
-            return {self.outputs[0]: result}
 
         return dict(zip(self.outputs, result, strict=False))
 
