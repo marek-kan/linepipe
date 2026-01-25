@@ -221,8 +221,11 @@ class Pipeline:
                             self.data_storage.sync()
 
                             logger.info("Success")
-                        except:
-                            logger.warning(f"Failed to store output '{k}' in data storage. Using runtime memory instead!")
+                        except Exception as e:
+                            logger.warning(
+                                f"Failed to store output '{k}' in data storage "
+                                f"({type(e).__name__}: {e}). Using runtime memory instead!"
+                            )
                             self.runtime_objs[k] = v
 
                 if self.track_history:
