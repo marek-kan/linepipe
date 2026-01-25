@@ -74,7 +74,7 @@ class Pipeline:
     def __init__(
         self,
         nodes: list[Node],
-        config: Any,
+        config: Any = None,
         track_history: bool = False,
         cache_storage_path: str | Path = Path("./.cache/data_storage/"),
         use_persistant_cache: bool = False,
