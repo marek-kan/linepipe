@@ -29,7 +29,7 @@ def test_pipeline_simple_execution() -> None:
         ),
     ]
 
-    pipeline = Pipeline(nodes=nodes, config=Config(), add=5, use_persistant_cache=True)
+    pipeline = Pipeline(nodes=nodes, config=Config(), add=5, use_persistent_cache=True)
 
     pipeline.run()
 
@@ -50,7 +50,7 @@ def test_pipeline_addition() -> None:
     def g(y: int) -> int:
         return y * 2
 
-    p1 = Pipeline(nodes=[Node(f, inputs=["x"], outputs=["y"])], config={}, x=3, use_persistant_cache=True)
+    p1 = Pipeline(nodes=[Node(f, inputs=["x"], outputs=["y"])], config={}, x=3, use_persistent_cache=True)
 
     p2 = Pipeline(
         nodes=[Node(g, inputs=["y"], outputs=["z"])],

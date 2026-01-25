@@ -77,7 +77,7 @@ class Pipeline:
         config: Any = None,
         track_history: bool = False,
         cache_storage_path: str | Path = Path("./.cache/data_storage/"),
-        use_persistant_cache: bool = False,
+        use_persistent_cache: bool = False,
         **kwargs: Any,
     ) -> None:
         """
@@ -86,7 +86,7 @@ class Pipeline:
             config: dot-accessible config, i.e., it is possible to get some value as `config_obj.key`
             track_history: if to track history in-memory dict. If True, self.history: list[dict] contains the node's name, inputs, and outputs.
             cache_storage_path: where to persist data_storage: shelve.Shelf
-            use_persistant_cache: if to persist data_storage on disk.
+            use_persistent_cache: if to persist data_storage on disk.
             **kwargs: any runtime constants, variables that are not present in config. For example, DB engine or such.
         """
         self.nodes = nodes
@@ -94,7 +94,7 @@ class Pipeline:
         self.history: list[dict[str, Any]] = []
         self.config = deepcopy(config)
         self.cache_storage_path = cache_storage_path
-        self.use_persistant_cache = use_persistant_cache
+        self.use_persistent_cache = use_persistent_cache
         # Note: this is needed bc. not all the objects are pickle serializable, for example, sqlalchemy eng
         self.runtime_objs = deepcopy(kwargs)
 
@@ -159,7 +159,7 @@ class Pipeline:
             - an in-memory dictionary if persistence is disabled
             - a filesystem-backed store otherwise
         """
-        if not self.use_persistant_cache:
+        if not self.use_persistent_cache:
             logger.info("Using in-memory cache storage")
             return shelve.Shelf({})
 
@@ -263,7 +263,7 @@ class Pipeline:
             config=deepcopy(self.config),
             track_history=new_track_history,
             cache_storage_path=self.cache_storage_path,
-            use_persistant_cache=any([self.use_persistant_cache, other.use_persistant_cache]),
+            use_persistent_cache=any([self.use_persistent_cache, other.use_persistent_cache]),
             **runtime_variables,
         )
 

@@ -10,6 +10,61 @@ It focuses on:
 * fast iteration and debugging thanks to (local / in-memory) caching
 * simple mental models
 
+Example of a pipeline:
+```python
+pipeline = Pipeline(
+    nodes=[
+        Node(
+            func=nodes.create_db_engine,
+            inputs=["config.db"],
+            outputs=["conn"],
+        ),
+        Node(
+            func=nodes.load_data,
+            inputs=["conn"],
+            outputs=["df"],
+        ),
+        Node(
+            func=nodes.preprocess_data,
+            inputs=["df", "config.preprocessing"],
+            outputs=["df_processed"],
+        ),
+        Node(
+            func=nodes.feature_engineering,
+            inputs=["df_processed", "config.feature_engineering"],
+            outputs=["df_features"],
+        ),
+        Node(
+            func=nodes.train,
+            inputs=["df_features", "config.model_params"],
+            outputs=["model"],
+        ),
+    ],
+    config=config
+)
+
+pipeline.run()
+```
+
+A minimal end-to-end example is available as a Jupyter notebook:
+
+- `examples/basic_usage.ipynb`
+
+It walks through:
+- defining nodes
+- building a pipeline
+- running it and inspecting outputs
+
+---
+
+## Installation
+
+`pip install linepipe`
+
+Optionally:
+ - `pip install linepipe[memory]` - [memory profiling](#optional-memory-profiling) nodes
+ - `pip install linepipe[plot]` - plotly instead default string [pipeline graph](#pipeline-visualization)
+
 ---
 
 ## Why linepipe?
@@ -91,6 +146,12 @@ Intermediate results can be cached automatically.
 
 ## Inputs and outputs
 
+Resolution order is:
+
+ 1) config
+ 2) data-cache
+ 3) Runtime constants (i.e. kwargs in pipeline object)
+
 ### Explicit data flow
 
 Each node declares **string-named inputs and outputs**:
@@ -126,14 +187,14 @@ Node(
 
 ### Persistent cache
 
-You can turn on a disk-backed cache (`shelve`) to store intermediate results with `use_persistant_cache=True`.
+You can turn on a disk-backed cache (`shelve`) to store intermediate results with `use_persistent_cache=True`.
 
 ```python
 pipeline = Pipeline(
     nodes=nodes,
     config=config,
     cache_storage_path="./.cache/pipeline.db",
-    use_persistant_cache=True,
+    use_persistent_cache=True,
 )
 ```
 
@@ -182,7 +243,7 @@ from my_package.pipelines.outputs import nodes
 write_val_metrics = Node(
     func=create_named_partial_function(
         func=nodes.write_pipeline_output,
-        func_name="write_val_metricts",
+        func_name="write_val_metrics",
         table_name="metrics",
         schema="ml"
     ),
@@ -228,44 +289,60 @@ Composition:
 
 ---
 
-## Pipeline vizualization
+## Pipeline visualization
 
-`linepipe.viz` provides simple, no-dependency ascii graph drawing function `draw_ascii_pipeline`. It draws nodes in order they are defined along with their inputs and ouputs - good for quick check.
+`linepipe.viz` provides simple, no-dependency ascii graph drawing function `draw_ascii_pipeline`. It draws nodes in order they are defined along with their inputs and outputs - good for quick check.
 
 ```python
+from linepipe import viz
 
+print(viz.draw_ascii_pipeline(pipeline))
 ```
 
 Output can look like this:
 ```
 Pipeline (5 nodes)
 
-[load_matches]           # Node name
+[load_data]
   outputs:
-    - raw_matches
+    - raw_data
       |
       v
-[clean_matches]
-  inputs:                # list of inputs
-    - raw_matches
-  outputs:               # list of outputs
-    - clean_matches
+[clean_data]
+  inputs:
+    - raw_data
+  outputs:
+    - clean_data
       |
       v
 [rolling_goals]
   inputs:
-    - clean_matches
+    - clean_data
     - config.window
-    - config.min_matches
+    - config.min_periods
   outputs:
     - rolling_features
-
-    ...
+      |
+      v
+[merge]
+  inputs:
+    - clean_data
+    - rolling_features
+  outputs:
+    - features
+      |
+      v
+[write_features]
+  inputs:
+    - features
+  (no outputs)
 ```
 
-If you need something more vizual for documatation you can install optional dependency - `plotly` (`pip install linepipe[plotly]`) and use `plot_pipeline` function. Which would look like:
+If you need something more visual for documentation purposes you can install optional dependency - `plotly` (`pip install linepipe[plot]`) and use `plot_pipeline` function - however, this function is experimental. Graph of pipeline above would look like:
 
-# PASTE PNG
+`viz.plot_pipeline_graph(full_pipeline)`
+
+![Pipeline plot](pipeline_plot.png)
 
 ---
 
@@ -277,8 +354,8 @@ Enable execution history for debugging:
 pipeline = Pipeline(
     nodes=nodes,
     config=config,
-    track_history=True,  # in-memory persistant after `run()` is finished
-    use_persistant_cache=False,  # (if True) disk persistant after `run()` is finished
+    track_history=True,  # in-memory persistent after `run()` is finished
+    use_persistent_cache=False,  # (if True) disk persistent after `run()` is finished
 )
 ```
 
@@ -298,7 +375,7 @@ Each entry contains:
 
 ## [Optional] Memory profiling
 
-If you wish to profile your nodes you can install optional `memory_profiler` dependency with `pip install linepipe[memory-profiler]`. This gives you ability to log memory usage during run of a node. For example:
+If you wish to profile your nodes you can install optional `memory_profiler` dependency with `pip install linepipe[memory]`. This gives you ability to log memory usage during run of a node. For example:
 
 ```python
 pipeline = Pipeline(
@@ -316,12 +393,12 @@ pipeline.run()
 
 This will produce logs like:
 
-`[write_features] ΔMem: 0.94 MiB | Peak: 0.94 MiB`
+`[expensive_function] ΔMem: 0.94 MiB | Peak: 0.94 MiB`
 
-Structrure is `[node_name] ΔMem: {float} MiB | Peak: {float} MiB`
+Structure is `[node_name] ΔMem: {float} MiB | Peak: {float} MiB`
 
  * ΔMem: delta between first and last recorded value
- * Peak: max(recorded_values) - recorded values[0]
+ * Peak: delta between maximum recorded value and first recorded value
 
 ---
 
