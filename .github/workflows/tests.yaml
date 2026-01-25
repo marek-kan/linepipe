@@ -20,7 +20,9 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install
-        run: pip install -e .[dev,memory,plot]
+        run: |
+          pip install poetry
+          poetry install --with dev --all-extras
 
       - name: pre-commit
         run: pre-commit run -a
