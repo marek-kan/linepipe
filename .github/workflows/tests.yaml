@@ -25,7 +25,7 @@ jobs:
           poetry install --with dev --all-extras
 
       - name: pre-commit
-        run: pre-commit run -a
+        run: poetry run pre-commit run -a
 
       - name: Pytest
-        run: pytest
+        run: poetry run pytest
