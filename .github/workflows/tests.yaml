@@ -1,0 +1,31 @@
+name: Tests
+
+on:
+  workflow_call:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      CI: "true"
+
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install
+        run: |
+          pip install poetry
+          poetry install --with dev --all-extras
+
+      - name: pre-commit
+        run: poetry run pre-commit run -a
+
+      - name: Pytest
+        run: poetry run pytest
