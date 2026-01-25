@@ -221,7 +221,7 @@ class Pipeline:
                             self.data_storage.sync()
 
                             logger.info("Success")
-                        except (TypeError, pickle.PicklingError):
+                        except:
                             logger.warning(f"Failed to store output '{k}' in data storage. Using runtime memory instead!")
                             self.runtime_objs[k] = v
 

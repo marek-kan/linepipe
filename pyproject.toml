@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "linepipe"
-version = "0.0.0"  # placeholder, overridden by dynamic versioning
+version = "0.1.1"
 description = "Composable, linear pipelines"
 authors = ["Marek Kancir <kancir.marek@gmail.com>"]
 license = "MIT"
