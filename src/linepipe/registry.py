@@ -152,17 +152,16 @@ class ObjectRegistry:
         if placement is None:
             return
 
-        logger.info(f"Releasing '{key}' from {placement.name}")  # pyright: ignore[reportOptionalMemberAccess]
-
         if placement is ObjPlacement.RUNTIME:
+            logger.info(f"Releasing '{key}' from {ObjPlacement.RUNTIME.name}")
             self.runtime_ephemeral.pop(key, None)
             self.placement.pop(key, None)
 
         elif placement is ObjPlacement.STORAGE:
             if not self.use_persistent_cache:
+                logger.info(f"Releasing '{key}' from {ObjPlacement.STORAGE.name}")
                 self.data_storage.pop(key, None)
-
-            self.placement.pop(key, None)
+                self.placement.pop(key, None)
 
     def close(self) -> None:
         """
