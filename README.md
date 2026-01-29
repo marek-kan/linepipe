@@ -11,6 +11,9 @@ It focuses on:
 * simple mental models
 
 Example of a pipeline:
+
+Each node consumes named inputs and produces named outputs, which are stored in an internal registry and made available to downstream nodes.
+
 ```python
 pipeline = Pipeline(
     nodes=[
@@ -142,15 +145,39 @@ pipeline.run()
 
 Intermediate results can be cached automatically.
 
+### Object Registry
+
+During execution, `linepipe` maintains an internal object registry that:
+
+- stores intermediate node outputs
+  - optionally persists them to disk
+- holds runtime-only objects (e.g. DB connections)
+- injects runtime constants into the pipeline
+
+The registry is created per pipeline run and closed automatically after run is finished.
+Users can reopen in with `pipeline.get_obj_registry()`.
+
 ---
 
 ## Inputs and outputs
 
-Resolution order is:
+Resolution rules:
 
- 1) config
- 2) data-cache
- 3) Runtime constants (i.e. kwargs in pipeline object)
+1) Inputs starting with `config.` or equal to `config` are resolved from the pipeline configuration.
+2) All other inputs are resolved from the pipeline's internal object registry (which may contain persisted or in-memory objects)
+3) Runtime constants are injected into the registry at pipeline creation time
+
+### Name collisions
+
+Each name in a pipeline must uniquely refer to a single object.
+
+If a name exists both as:
+- a runtime constant, and
+- a persisted cached object
+
+the pipeline will fail fast with an error.
+
+This prevents subtle bugs caused by stale cache values overriding runtime state.
 
 ### Explicit data flow
 
@@ -198,15 +225,17 @@ pipeline = Pipeline(
 )
 ```
 
-* Cached outputs can be reused across runs. Ideal for debugging and development - if pipeline fails at some point, it is easy to load the inputs, and debug the function.
-* The cache is closed automatically at the end of execution
+* Cached outputs can be reused across runs, as long as output names do not conflict with runtime constants.
+* When persistent caching is enabled, cached objects from previous runs are automatically restored at startup.
+* The cache is closed automatically at the end of execution (i.e. `pipeline.run()`)
 
 You can reopen it for inspection:
 
 ```python
-ds = pipeline.open_cache()
-print(ds.keys())
-ds.close()
+ds = pipeline.get_obj_registry()
+# placement of registred objects:
+print(registry.placement)
+registry.close()
 ```
 
 ---
@@ -284,7 +313,7 @@ Composition:
 
 * preserves execution order
 * prevents output name collisions
-* merges runtime objects and configuration
+* merges runtime constants and configuration
 * Gives you pipeline reusability, for example, same feature-generation pipeline in train and predict
 
 ---
@@ -370,6 +399,8 @@ Each entry contains:
 * node name
 * resolved inputs
 * outputs
+
+Inputs and outputs are deep-copied at execution time to preserve snapshots. For large objects, this can significantly increase memory usage.
 
 ---
 

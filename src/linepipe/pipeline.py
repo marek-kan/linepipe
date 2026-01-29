@@ -1,6 +1,3 @@
-import gc
-import pickle
-import shelve
 from collections import defaultdict
 from copy import deepcopy
 from logging import getLogger
@@ -8,6 +5,7 @@ from pathlib import Path
 from typing import Any, get_args, get_type_hints
 
 from linepipe.node import Node
+from linepipe.registry import ObjectRegistry
 
 logger = getLogger(__name__)
 
@@ -64,10 +62,10 @@ class Pipeline:
     """
     A sequential execution pipeline composed of Node objects.
 
-    The Pipeline manages:
-    - Dependency resolution between node inputs and outputs
-    - Optional persistent or in-memory caching of intermediate results
-    - Runtime-only objects that cannot be pickled
+    The Pipeline is responsible for:
+    - Orchestrating node execution order
+    - Resolving node inputs by name (config vs registry-managed objects)
+    - Coordinating lifecycle of an ObjectRegistry per run
     - Optional execution history tracking for debugging
 
     Pipelines can be composed using the `+` operator.
@@ -78,18 +76,21 @@ class Pipeline:
         nodes: list[Node],
         config: Any = None,
         track_history: bool = False,
-        cache_storage_path: str | Path = Path("./.cache/data_storage/"),
         use_persistent_cache: bool = False,
-        auto_release_unused_outputs: bool = True,
+        cache_storage_path: str | Path = Path("./.cache/data_storage/"),
         **kwargs: Any,
     ) -> None:
         """
         Args:
             nodes: list of functions wrapped in `linepipe.node.Node`
             config: dot-accessible config, i.e., it is possible to get some value as `config_obj.key`
-            track_history: if to track history in-memory dict. If True, self.history: list[dict] contains the node's name, inputs, and outputs.
-            cache_storage_path: where to persist data_storage: shelve.Shelf
+            track_history:
+                If True, execution history is stored in-memory as a list of dicts.
+                Each entry contains the node name, inputs, and outputs.
+                Inputs and outputs are deep-copied to preserve snapshots, which may lead
+                to significant memory usage for large objects.
             use_persistent_cache: if to persist data_storage on disk.
+            cache_storage_path: where to persist data_storage in case of `use_persistent_cache`
             **kwargs: any runtime constants, variables that are not present in config. For example, DB engine or such.
         """
         self.nodes = nodes
@@ -98,9 +99,7 @@ class Pipeline:
         self.config = deepcopy(config)
         self.cache_storage_path = cache_storage_path
         self.use_persistent_cache = use_persistent_cache
-        self.auto_release_unused_outputs = auto_release_unused_outputs
-        # Note: this is needed bc. not all the objects are pickle serializable, for example, sqlalchemy eng
-        self.runtime_objs = deepcopy(kwargs)
+        self.runtime_constants = deepcopy(kwargs)
 
     @property
     def output_hints(self) -> dict[str, Any]:
@@ -131,7 +130,7 @@ class Pipeline:
                 return_tuple = get_args(return_type)
 
                 if not return_tuple:
-                    raise ValueError(f"Function `{node.func.__name__}` with multiple outputs is incorectlly annotated!")
+                    raise ValueError(f"Function `{node.func.__name__}` with multiple outputs is incorrectly annotated!")
 
                 if Ellipsis in return_tuple:
                     raise ValueError(f"Function `{node.func.__name__}` must use a fixed-length tuple annotation")
@@ -154,7 +153,7 @@ class Pipeline:
     def nodes_info(self) -> list[dict[str, Any]]:
         return [{"func": node.func.__name__, "inputs": node.inputs, "outputs": node.outputs} for node in self.nodes]
 
-    def build_cleanup_plan(self) -> dict[int, list[str]]:
+    def _build_cleanup_plan(self) -> dict[int, list[str]]:
         last_use: dict[str, int] = {}
 
         for nth, node in enumerate(self.nodes_info):
@@ -163,57 +162,44 @@ class Pipeline:
 
         cleanup = defaultdict(list)
         for key, nth in last_use.items():
-            if key.startswith("config."):
+            if key.startswith("config.") or key == "config":
                 continue
 
             cleanup[nth].append(key)
 
         return dict(cleanup)
 
-    def open_cache(self) -> shelve.Shelf[Any]:
-        """
-        Initialize cache storage.
-
-        Returns:
-            A shelve.Shelf instance backed by:
-            - an in-memory dictionary if persistence is disabled
-            - a filesystem-backed store otherwise
-        """
-        if not self.use_persistent_cache:
-            logger.info("Using in-memory cache storage")
-            return shelve.Shelf({})
-
-        if isinstance(self.cache_storage_path, str):
-            self.cache_storage_path = Path(self.cache_storage_path)
-
-        if not self.cache_storage_path.parent.exists():
-            logger.info(f"Creating data storage directory: {self.cache_storage_path.parent}")
-            self.cache_storage_path.parent.mkdir(parents=True)
-        else:
-            logger.info(f"Using data storage located at: {self.cache_storage_path.parent}")
-
-        return shelve.open(str(self.cache_storage_path), protocol=pickle.HIGHEST_PROTOCOL, writeback=False)  # noqa: S301
+    def get_obj_registry(self) -> ObjectRegistry:
+        return ObjectRegistry(
+            cache_storage_path=self.cache_storage_path,
+            use_persistent_cache=self.use_persistent_cache,
+            runtime_constants=self.runtime_constants,
+        )
 
     def run(self) -> None:
         """
-        Executes the pipeline by processing each node sequentially. For each node, the method:
+        Execute the pipeline by processing nodes sequentially.
 
-        1. Gathers required inputs from three sources in the following order:
-           - If the key starts with "config", the corresponding attribute from the Pipeline instance is deep-copied.
-           - If the key exists in the (non)persistent data storage (using shelve), it is retrieved from there.
-           - If the key exists in the runtime objects dictionary, it is retrieved from there.
-           If an input key is missing from both storage and runtime objects, a KeyError is raised.
+        For each node, the pipeline:
 
-        2. Invokes the node's function with the collected inputs.
+        1. Resolves required inputs:
+            - Inputs prefixed with "config." or equal to "config" are taken from the pipeline configuration and deep-copied.
+            - All other inputs are retrieved from the ObjectRegistry and deep-copied.
+            - A KeyError is raised if a required input is missing.
 
-        3. Processes the outputs:
-           - If the output is pickle-compatible, it is stored in the shelve data storage.
-           - If storing fails (e.g., due to non-pickleable objects), the output is stored in the runtime objects and
-             a warning is logged.
-        4. If history tracking is enabled, logs the node's name, inputs, and outputs for debugging purposes.
+        2. Invokes the node with the resolved inputs.
+
+        3. Stores node outputs via the ObjectRegistry, which decides whether outputs are persisted or kept in runtime memory.
+
+        4. Optionally records execution history by storing deep-copied snapshots of node inputs and outputs.
+
+        5. Releases intermediate objects according to the cleanup plan.
+
+        All registry resources are flushed and closed when execution finishes, even if an exception occurs.
         """
-        self.data_storage = self.open_cache()
-        cleanup_plan = self.build_cleanup_plan()
+
+        cleanup_plan = self._build_cleanup_plan()
+        registry = self.get_obj_registry()
 
         try:
             for nth_node, node in enumerate(self.nodes):
@@ -226,12 +212,11 @@ class Pipeline:
                         node_inputs[key] = deepcopy(attrgetter(key.replace("config.", ""))(self.config))
                     elif key == "config":
                         node_inputs[key] = deepcopy(self.config)
-                    elif key in self.data_storage:
-                        node_inputs[key] = deepcopy(self.data_storage[key])
-                    elif key in self.runtime_objs:
-                        node_inputs[key] = deepcopy(self.runtime_objs[key])
                     else:
-                        raise KeyError(f"Input '{key}' not found in data storage or runtime objects.")
+                        if not registry.has(key):
+                            raise KeyError(f"Input '{key}' not found for node {node.func.__name__} in the registry.")
+
+                        node_inputs[key] = deepcopy(registry.get(key))
 
                 output = node.run(node_inputs)
 
@@ -239,45 +224,28 @@ class Pipeline:
                     raise ValueError(f"Output of node is not a dict! {type(output)=}")
 
                 for k, v in output.items():
-                    try:
-                        logger.info(f"Storing output '{k}' in data storage.")
-                        self.data_storage[k] = v
-                        self.data_storage.sync()
+                    registry.set(key=k, value=v)
 
-                        logger.info("Success")
-                    except Exception as e:
-                        logger.warning(
-                            f"Failed to store output '{k}' in data storage "
-                            f"({type(e).__name__}: {e}). Using runtime memory instead!"
-                        )
-                        self.runtime_objs[k] = v
+                registry.flush()
 
                 if self.track_history:
                     self.history.append(
                         {
                             "node": node.func.__name__,
-                            "inputs": node_inputs,
-                            "outputs": output,
+                            "inputs": deepcopy(node_inputs),
+                            "outputs": deepcopy(output),
                         }
                     )
 
                 # Clean-up
-                del node_inputs
-                del output
+                node_inputs.clear()
+                output.clear()
 
-                if self.auto_release_unused_outputs:
-                    for k in cleanup_plan.get(nth_node, []):
-                        self.runtime_objs.pop(k, None)
-
-                        if not self.use_persistent_cache and k in self.data_storage.keys():  # noqa: SIM118
-                            self.data_storage.pop(k, None)  # default doesn't work properly
-                            self.data_storage.sync()
-
-                if nth_node % 5 == 0:
-                    gc.collect()
+                for k in cleanup_plan.get(nth_node, []):
+                    registry.release(key=k)
 
         finally:
-            self.data_storage.close()
+            registry.close()
         return
 
     def __add__(self, other: "Pipeline") -> "Pipeline":
@@ -299,7 +267,7 @@ class Pipeline:
         if output_names:
             raise ValueError(f"Output names {output_names} are present in both Pipelines and cannot be combined!")
 
-        runtime_variables = {**self.runtime_objs, **other.runtime_objs}
+        runtime_variables = {**self.runtime_constants, **other.runtime_constants}
 
         new_pipeline = Pipeline(
             nodes=combined_nodes,
