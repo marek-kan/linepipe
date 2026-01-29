@@ -62,9 +62,11 @@ class Node:
                 "Install with: pip install linepipe[memory]"
             ) from exc
 
+        baseline = memory_usage(-1, interval=0.05, timeout=0.5)[0]
+
         mem_values, result = memory_usage((func, (), {}), interval=0.05, retval=True)  # pyright: ignore[reportArgumentType]
         delta = mem_values[-1] - mem_values[0]
-        peak = max(mem_values) - mem_values[0]
+        peak = max(mem_values) - baseline
 
         return {"delta": delta, "peak": peak}, result
 

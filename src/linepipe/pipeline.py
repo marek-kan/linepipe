@@ -1,5 +1,7 @@
+import gc
 import pickle
 import shelve
+from collections import defaultdict
 from copy import deepcopy
 from logging import getLogger
 from pathlib import Path
@@ -78,6 +80,7 @@ class Pipeline:
         track_history: bool = False,
         cache_storage_path: str | Path = Path("./.cache/data_storage/"),
         use_persistent_cache: bool = False,
+        auto_release_unused_outputs: bool = True,
         **kwargs: Any,
     ) -> None:
         """
@@ -95,6 +98,7 @@ class Pipeline:
         self.config = deepcopy(config)
         self.cache_storage_path = cache_storage_path
         self.use_persistent_cache = use_persistent_cache
+        self.auto_release_unused_outputs = auto_release_unused_outputs
         # Note: this is needed bc. not all the objects are pickle serializable, for example, sqlalchemy eng
         self.runtime_objs = deepcopy(kwargs)
 
@@ -150,6 +154,22 @@ class Pipeline:
     def nodes_info(self) -> list[dict[str, Any]]:
         return [{"func": node.func.__name__, "inputs": node.inputs, "outputs": node.outputs} for node in self.nodes]
 
+    def build_cleanup_plan(self) -> dict[int, list[str]]:
+        last_use: dict[str, int] = {}
+
+        for nth, node in enumerate(self.nodes_info):
+            for inp in node["inputs"]:
+                last_use[inp] = nth
+
+        cleanup = defaultdict(list)
+        for key, nth in last_use.items():
+            if key.startswith("config."):
+                continue
+
+            cleanup[nth].append(key)
+
+        return dict(cleanup)
+
     def open_cache(self) -> shelve.Shelf[Any]:
         """
         Initialize cache storage.
@@ -193,8 +213,10 @@ class Pipeline:
         4. If history tracking is enabled, logs the node's name, inputs, and outputs for debugging purposes.
         """
         self.data_storage = self.open_cache()
+        cleanup_plan = self.build_cleanup_plan()
+
         try:
-            for node in self.nodes:
+            for nth_node, node in enumerate(self.nodes):
                 logger.info(f"Running node: {node.func.__name__}")
 
                 # Record the inputs for the current node.
@@ -207,26 +229,28 @@ class Pipeline:
                     elif key in self.data_storage:
                         node_inputs[key] = deepcopy(self.data_storage[key])
                     elif key in self.runtime_objs:
-                        node_inputs[key] = self.runtime_objs[key]
+                        node_inputs[key] = deepcopy(self.runtime_objs[key])
                     else:
                         raise KeyError(f"Input '{key}' not found in data storage or runtime objects.")
 
                 output = node.run(node_inputs)
 
-                if isinstance(output, dict):
-                    for k, v in output.items():
-                        try:
-                            logger.info(f"Storing output '{k}' in data storage.")
-                            self.data_storage[k] = v
-                            self.data_storage.sync()
+                if not isinstance(output, dict):
+                    raise ValueError(f"Output of node is not a dict! {type(output)=}")
 
-                            logger.info("Success")
-                        except Exception as e:
-                            logger.warning(
-                                f"Failed to store output '{k}' in data storage "
-                                f"({type(e).__name__}: {e}). Using runtime memory instead!"
-                            )
-                            self.runtime_objs[k] = v
+                for k, v in output.items():
+                    try:
+                        logger.info(f"Storing output '{k}' in data storage.")
+                        self.data_storage[k] = v
+                        self.data_storage.sync()
+
+                        logger.info("Success")
+                    except Exception as e:
+                        logger.warning(
+                            f"Failed to store output '{k}' in data storage "
+                            f"({type(e).__name__}: {e}). Using runtime memory instead!"
+                        )
+                        self.runtime_objs[k] = v
 
                 if self.track_history:
                     self.history.append(
@@ -236,6 +260,22 @@ class Pipeline:
                             "outputs": output,
                         }
                     )
+
+                # Clean-up
+                del node_inputs
+                del output
+
+                if self.auto_release_unused_outputs:
+                    for k in cleanup_plan.get(nth_node, []):
+                        self.runtime_objs.pop(k, None)
+
+                        if not self.use_persistent_cache and k in self.data_storage.keys():  # noqa: SIM118
+                            self.data_storage.pop(k, None)  # default doesn't work properly
+                            self.data_storage.sync()
+
+                if nth_node % 5 == 0:
+                    gc.collect()
+
         finally:
             self.data_storage.close()
         return
