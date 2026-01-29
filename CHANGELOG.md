@@ -7,6 +7,12 @@ This project follows semantic versioning as closely as possible while in 0.x.
 
 ---
 
+## [0.2.1] - 2026-01-29
+
+### Fixed
+ - Corrected logging during registry release
+ - Fixed incorrect registry placement pop if persistent cahce is used
+
 ## [0.2.0] - 2026-01-29
 
 ### Breaking / Behavioral changes
