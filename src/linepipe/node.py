@@ -54,6 +54,7 @@ class Node:
         return dict(zip(self.outputs, result, strict=False))
 
     def _profile_memory(self, func: Callable[[], Any]) -> tuple[dict[str, float], Any]:
+        """This is a best-effort, sampling-based measurement intended for debugging and comparison, not exact accounting"""
         try:
             from memory_profiler import memory_usage  # pyright: ignore[reportMissingImports]
         except ImportError as exc:
@@ -63,9 +64,10 @@ class Node:
             ) from exc
 
         baseline_values = memory_usage(-1, interval=0.05, timeout=0.5)
-        baseline = sum(baseline_values) / len(baseline_values)
 
         mem_values, result = memory_usage((func, (), {}), interval=0.05, retval=True)  # pyright: ignore[reportArgumentType]
+        baseline = sum(baseline_values) / len(baseline_values) if baseline_values else mem_values[0]
+
         delta = mem_values[-1] - mem_values[0]
         peak = max(mem_values) - baseline
 
