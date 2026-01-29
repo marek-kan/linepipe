@@ -34,13 +34,13 @@ def test_pipeline_simple_execution() -> None:
     pipeline.run()
 
     try:
-        ds = pipeline.open_cache()
+        registry = pipeline.get_obj_registry()
 
-        assert ds["y"] == 15
-        assert ds["z"] == 16
+        assert registry.get("y") == 15
+        assert registry.get("z") == 16
 
     finally:
-        ds.close()
+        registry.close()
 
 
 def test_pipeline_addition() -> None:
@@ -61,11 +61,12 @@ def test_pipeline_addition() -> None:
     pipeline.run()
 
     try:
-        ds = pipeline.open_cache()
+        registry = pipeline.get_obj_registry()
 
-        assert ds["z"] == 8
+        assert registry.get("z") == 8
+
     finally:
-        ds.close()
+        registry.close()
 
 
 def test_pipeline_output_name_collision() -> None:
