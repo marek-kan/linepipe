@@ -7,6 +7,12 @@ This project follows semantic versioning as closely as possible while in 0.x.
 
 ---
 
+## [0.2.12] - 2026-01-30
+
+### Fixed
+  - Prevented errors when encountering objects that cannot be deep-copied by falling back to shallow references.
+  - Historical inputs are now captured before node execution, ensuring history reflects the true inputs even if a node modifies them.
+
 ## [0.2.1] - 2026-01-29
 
 ### Fixed

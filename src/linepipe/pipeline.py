@@ -99,7 +99,7 @@ class Pipeline:
         self.config = deepcopy(config)
         self.cache_storage_path = cache_storage_path
         self.use_persistent_cache = use_persistent_cache
-        self.runtime_constants = deepcopy(kwargs)
+        self.runtime_constants = {k: self._snapshot(value=v, key=k) for k, v in kwargs.items()}
 
     @property
     def output_hints(self) -> dict[str, Any]:
@@ -176,6 +176,14 @@ class Pipeline:
             runtime_constants=self.runtime_constants,
         )
 
+    @staticmethod
+    def _snapshot(value: Any, key: str) -> Any:
+        try:
+            return deepcopy(value)
+        except Exception:
+            logger.warning(f"Couldn't deepcopy '{key}'; using shallow reference")
+            return value
+
     def run(self) -> None:
         """
         Execute the pipeline by processing nodes sequentially.
@@ -216,7 +224,13 @@ class Pipeline:
                         if not registry.has(key):
                             raise KeyError(f"Input '{key}' not found for node {node.func.__name__} in the registry.")
 
-                        node_inputs[key] = deepcopy(registry.get(key))
+                        node_inputs[key] = self._snapshot(value=registry.get(key), key=key)
+
+                if self.track_history:
+                    hist_dict = {
+                        "node": node.func.__name__,
+                        "inputs": {k: self._snapshot(value=v, key=k) for k, v in node_inputs.items()},
+                    }
 
                 output = node.run(node_inputs)
 
@@ -229,17 +243,11 @@ class Pipeline:
                 registry.flush()
 
                 if self.track_history:
-                    self.history.append(
-                        {
-                            "node": node.func.__name__,
-                            "inputs": deepcopy(node_inputs),
-                            "outputs": deepcopy(output),
-                        }
-                    )
-
-                # Clean-up
-                node_inputs.clear()
-                output.clear()
+                    hist_dict["outputs"] = {k: self._snapshot(value=v, key=k) for k, v in output.items()}
+                    self.history.append(hist_dict)
+                else:
+                    node_inputs.clear()
+                    output.clear()
 
                 for k in cleanup_plan.get(nth_node, []):
                     registry.release(key=k)
