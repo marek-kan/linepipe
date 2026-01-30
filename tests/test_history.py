@@ -1,5 +1,3 @@
-
-
 from linepipe.node import Node
 from linepipe.pipeline import Pipeline
 
@@ -34,8 +32,9 @@ def test_pipeline_history_records_inputs_and_outputs() -> None:
     assert entry["inputs"]["multiplier"] == 3
     assert entry["outputs"]["y"] == 15
 
+
 def test_pipeline_history_is_not_affected_by_later_mutation() -> None:
-    def mutate(x: dict) -> dict:
+    def mutate(x: dict[str, int]) -> dict[str, dict[str, int]]:
         x["value"] += 1
         return {"out": x}
 
@@ -66,10 +65,11 @@ def test_pipeline_history_is_not_affected_by_later_mutation() -> None:
     assert hist_input["value"] == 1
     assert hist_output["out"]["value"] == 2
 
+
 def test_pipeline_history_non_deepcopyable_object() -> None:
     import threading
 
-    def identity(x):
+    def identity(x: threading.Lock) -> dict[str, threading.Lock]:
         return {"out": x}
 
     lock = threading.Lock()
