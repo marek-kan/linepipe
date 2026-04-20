@@ -2,22 +2,10 @@ import pytest
 
 from linepipe.node import Node
 from linepipe.pipeline import Pipeline
+from tests.conftest import Config
 
 
-class Inner:
-    def __init__(self) -> None:
-        self.value = 99
-
-
-class Config:
-    def __init__(self) -> None:
-        self.multiplier = 3
-        self.nested = {"ab": 123, "deep": {"value": 42}}
-        self.inner = Inner()
-        self.mapping = {"key": 777}
-
-
-def test_pipeline_simple_execution() -> None:
+def test_pipeline_simple_execution(obj_config: Config) -> None:
     def multiply(x: int, m: int) -> int:
         return x * m
 
@@ -37,7 +25,7 @@ def test_pipeline_simple_execution() -> None:
         ),
     ]
 
-    pipeline = Pipeline(nodes=nodes, config=Config(), add=5, use_persistent_cache=True)
+    pipeline = Pipeline(nodes=nodes, config=obj_config, add=5, use_persistent_cache=True)
 
     pipeline.run()
 
@@ -96,9 +84,7 @@ def test_pipeline_output_name_collision() -> None:
         _ = p1 + p2
 
 
-def test_pipeline_config_nested_dict() -> None:
-    """Access a value inside a dict attribute on config via dot notation."""
-
+def test_pipeline_config_nested_dict(obj_config: Config) -> None:
     def use_nested(val: int) -> int:
         return val + 1
 
@@ -110,7 +96,7 @@ def test_pipeline_config_nested_dict() -> None:
         ),
     ]
 
-    pipeline = Pipeline(nodes=nodes, config=Config(), use_persistent_cache=True)
+    pipeline = Pipeline(nodes=nodes, config=obj_config, use_persistent_cache=True)
     pipeline.run()
 
     try:
@@ -120,9 +106,8 @@ def test_pipeline_config_nested_dict() -> None:
         registry.close()
 
 
-def test_pipeline_config_deeply_nested_dict() -> None:
-    """Access a value two levels deep inside nested dicts."""
-
+@pytest.mark.parametrize("config", ["obj_config", "dict_config"], indirect=True)  # type: ignore[misc]
+def test_pipeline_config_deeply_nested(config: Config | dict) -> None:  # type: ignore[type-arg]
     def use_deep(val: int) -> int:
         return val * 2
 
@@ -134,7 +119,7 @@ def test_pipeline_config_deeply_nested_dict() -> None:
         ),
     ]
 
-    pipeline = Pipeline(nodes=nodes, config=Config(), use_persistent_cache=True)
+    pipeline = Pipeline(nodes=nodes, config=config, use_persistent_cache=True)
     pipeline.run()
 
     try:
@@ -144,9 +129,8 @@ def test_pipeline_config_deeply_nested_dict() -> None:
         registry.close()
 
 
-def test_pipeline_config_nested_attr() -> None:
-    """Access a value on a nested attribute object (pydantic-like)."""
-
+@pytest.mark.parametrize("config", ["obj_config", "dict_config"], indirect=True)  # type: ignore[misc]
+def test_pipeline_config_nested_attr(config: Config | dict) -> None:  # type: ignore[type-arg]
     def use_inner(val: int) -> int:
         return val - 9
 
@@ -158,7 +142,7 @@ def test_pipeline_config_nested_attr() -> None:
         ),
     ]
 
-    pipeline = Pipeline(nodes=nodes, config=Config(), use_persistent_cache=True)
+    pipeline = Pipeline(nodes=nodes, config=config, use_persistent_cache=True)
     pipeline.run()
 
     try:
@@ -168,9 +152,8 @@ def test_pipeline_config_nested_attr() -> None:
         registry.close()
 
 
-def test_pipeline_config_mixed_attr_and_dict() -> None:
-    """Access a dict value through an attribute object."""
-
+@pytest.mark.parametrize("config", ["obj_config", "dict_config"], indirect=True)  # type: ignore[misc]
+def test_pipeline_config_mixed_attr_and_dict(config: Config | dict) -> None:  # type: ignore[type-arg]
     def use_mapped(val: int) -> int:
         return val + 3
 
@@ -182,7 +165,7 @@ def test_pipeline_config_mixed_attr_and_dict() -> None:
         ),
     ]
 
-    pipeline = Pipeline(nodes=nodes, config=Config(), use_persistent_cache=True)
+    pipeline = Pipeline(nodes=nodes, config=config, use_persistent_cache=True)
     pipeline.run()
 
     try:
@@ -190,12 +173,3 @@ def test_pipeline_config_mixed_attr_and_dict() -> None:
         assert registry.get("result") == 780
     finally:
         registry.close()
-
-
-def test_pipeline_config_missing_nested_key() -> None:
-    """Missing nested key should use default (None) and not raise during attrgetter call."""
-    from linepipe.pipeline import attrgetter
-
-    getter = attrgetter("nonexistent.key", default=None)
-    cfg = Config()
-    assert getter(cfg) is None

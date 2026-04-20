@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "linepipe"
-version = "0.2.2"
+version = "1.0.0"
 description = "Composable, linear pipelines"
 authors = ["Marek Kancir <kancir.marek@gmail.com>"]
 license = "MIT"
@@ -16,12 +16,13 @@ keywords = [
 ]
 
 classifiers = [
-  "Development Status :: 3 - Alpha",
+  "Development Status :: 5 - Production/Stable",
   "Intended Audience :: Developers",
   "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
 ]
 
 [tool.poetry.dependencies]
@@ -126,4 +127,4 @@ module = [
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+pythonpath = ["."]
