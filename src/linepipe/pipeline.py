@@ -21,6 +21,17 @@ class attrgetter:
 
     __slots__ = ("_attrs", "_call", "_default")
 
+    @staticmethod
+    def _resolve(obj: Any, name: str) -> Any:
+        """Resolve a single name: try attribute access first, then item access (dict-like)."""
+        if hasattr(obj, name):
+            return getattr(obj, name)
+        else:
+            try:
+                return obj[name]
+            except (KeyError, TypeError, IndexError) as err:
+                raise AttributeError(f"'{type(obj).__name__}' object has no attribute or key '{name}'") from err
+
     def __init__(self, attr: str, *attrs: str, default: Any | None = None):
         self._default = default
 
@@ -32,7 +43,7 @@ class attrgetter:
 
             def func(obj: Any) -> Any:
                 for name in names:
-                    obj = getattr(obj, name)
+                    obj = attrgetter._resolve(obj, name)
                 return obj
 
         else:
@@ -47,7 +58,7 @@ class attrgetter:
     def __call__(self, obj: Any) -> Any:
         try:
             return self._call(obj)
-        except AttributeError:
+        except (AttributeError, KeyError, TypeError, IndexError):
             return self._default
 
     def __repr__(self) -> str:

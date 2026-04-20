@@ -208,6 +208,22 @@ Node(
 )
 ```
 
+Or using nested configuration:
+
+```python
+class Config:
+    rolling_average = {
+        "window": 5,
+        "min_samples": 3
+    }
+
+Node(
+    func=rolling_average,
+    inputs=["data", "config.rolling_average.window", "config.rolling_average.min_samples"],
+    outputs=["features"],
+)
+```
+
 ---
 
 ## Caching
