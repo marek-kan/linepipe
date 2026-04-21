@@ -12,18 +12,16 @@ logger = getLogger(__name__)
 
 class attrgetter:
     """
-    Return a callable object that fetches the given attribute(s) from its operand.
+    Return a callable object that fetches the given attribute(s) (or key(s)) from its operand.
     After f = attrgetter('name'), the call f(r) returns r.name.
     After g = attrgetter('name', 'date'), the call g(r) returns (r.name, r.date).
-    After h = attrgetter('name.first', 'name.last'), the call h(r) returns
-    (r.name.first, r.name.last).
+    After h = attrgetter('name.first', 'name.last'), the call h(r) returns (r.name.first, r.name.last).
     """
 
     __slots__ = ("_attrs", "_call", "_default")
 
     @staticmethod
     def _resolve(obj: Any, name: str) -> Any:
-        """Resolve a single name: try attribute access first, then item access (dict-like)."""
         if hasattr(obj, name):
             return getattr(obj, name)
         else:
@@ -33,11 +31,12 @@ class attrgetter:
                 raise AttributeError(f"'{type(obj).__name__}' object has no attribute or key '{name}'") from err
 
     def __init__(self, attr: str, *attrs: str, default: Any | None = None):
+        if not isinstance(attr, str):
+            raise TypeError("attribute name must be a string")
+
         self._default = default
 
         if not attrs:
-            if not isinstance(attr, str):
-                raise TypeError("attribute name must be a string")
             self._attrs: tuple[str, ...] = (attr,)
             names = attr.split(".")
 
@@ -47,6 +46,9 @@ class attrgetter:
                 return obj
 
         else:
+            if not all(isinstance(a, str) for a in attrs):
+                raise TypeError("attribute name must be a string")
+
             self._attrs = (attr,) + attrs
             getters = tuple(attrgetter(a, default=self._default) for a in self._attrs)
 

@@ -62,7 +62,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.ruff]
 line-length = 125
-target-version = "py310"
+target-version = "py311"
 src = ["src"]
 
 fix = true
@@ -101,7 +101,7 @@ indent-style = "space"
 line-ending = "auto"
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.11"
 strict = true
 
 warn_unused_configs = true

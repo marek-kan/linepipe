@@ -1,5 +1,7 @@
 from typing import Any
+
 import pytest
+
 
 class Inner:
     def __init__(self) -> None:
@@ -13,14 +15,17 @@ class Config:
         self.inner = Inner()
         self.mapping = {"key": 777}
 
-@pytest.fixture    # type: ignore[misc]
+
+@pytest.fixture  # type: ignore[misc]
 def dict_config() -> dict[str, Any]:
     return Config().__dict__
 
-@pytest.fixture    # type: ignore[misc]
+
+@pytest.fixture  # type: ignore[misc]
 def obj_config() -> Config:
     return Config()
 
-@pytest.fixture    # type: ignore[misc]
+
+@pytest.fixture  # type: ignore[misc]
 def config(request: pytest.FixtureRequest) -> Config | dict[str, Any]:
-    return request.getfixturevalue(request.param)    # type: ignore[no-any-return]
+    return request.getfixturevalue(request.param)  # type: ignore[no-any-return]

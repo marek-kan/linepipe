@@ -195,7 +195,7 @@ Node(
 
 ### Config injection
 
-Configuration values can be injected using `config.<attr>` or you can pass whole `config` object with `"config"`:
+Configuration values can be injected using `config.<attr>` or you can pass whole `config` object with just `"config"` and handle values retrieval "by hand" in a function:
 
 ```python
 class Config:
@@ -248,9 +248,11 @@ pipeline = Pipeline(
 You can reopen it for inspection:
 
 ```python
-ds = pipeline.get_obj_registry()
+registry = pipeline.get_obj_registry()
 # placement of registred objects:
 print(registry.placement)
+# print persisted output from registry
+print(registry["features"])
 registry.close()
 ```
 
@@ -279,7 +281,12 @@ Node(
 
 ## Named partial functions
 
-`linepipe` provides a helper to adapt generic functions into distinct pipeline nodes.
+`linepipe` provides a helper to adapt generic functions into distinct pipeline nodes. Standard `functools.partial` objects lack a `__name__` attribute, which can degrade logging and history tracking. Our `create_named_partial_function` solves this by assigning a stable name to the resulting callable. In the following example, node function `write_pipeline_output` accepts keyword arguments:
+ - `df: pd.DataFrame`
+ - `table_name: str`
+ - `schema: str`
+
+We pre-bind these arguments with `create_named_partial_function` and the pipeline will only pass the data (e.g., `df`) at runtime.
 
 ```python
 from linepipe.node import create_named_partial_function
@@ -287,12 +294,12 @@ from my_package.pipelines.outputs import nodes
 
 write_val_metrics = Node(
     func=create_named_partial_function(
-        func=nodes.write_pipeline_output,
-        func_name="write_val_metrics",
+        func=nodes.write_pipeline_output,  # accepts kwargs: df, table_name, schema
+        func_name="write_val_metrics",  # new function name, it will appear in logs
         table_name="metrics",
         schema="ml"
     ),
-    inputs=["val_metrics"],
+    inputs=["val_metrics"],  # Only 'df' remains to be resolved from the registry
     outputs=[],
 )
 
@@ -308,11 +315,11 @@ write_predictions = Node(
 )
 ```
 
-This:
+This approach:
 
 * pre-binds keyword arguments
-* gives the node a stable, readable name
-* improves logging, history, and introspection
+* gives a stable, readable name to a partial function
+* makes logging, history, and introspection more readable
 
 ---
 
@@ -399,7 +406,7 @@ Enable execution history for debugging:
 pipeline = Pipeline(
     nodes=nodes,
     config=config,
-    track_history=True,  # in-memory persistent after `run()` is finished
+    track_history=True,  # in-memory persistent after `run()` is finished, no need to re-open registry
     use_persistent_cache=False,  # (if True) disk persistent after `run()` is finished
 )
 ```
