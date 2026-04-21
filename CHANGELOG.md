@@ -7,7 +7,12 @@ This project follows semantic versioning as closely as possible while in 0.x.
 
 ---
 
-## [0.2.12] - 2026-01-30
+## [1.0.0] - 2026-04-14
+
+### Added
+  - Added nested attribute or key reference in `attrgetter`. Allows to use "config.foo.boo" syntax in `Node` input.
+
+## [0.2.2] - 2026-01-30
 
 ### Fixed
   - Prevented errors when encountering objects that cannot be deep-copied by falling back to shallow references.
